@@ -20,3 +20,6 @@ If not, you can run python http server using `http_server.sh`. It will serve the
 Use `http://your_http_server_ip:port`.
 
 Example: `http://192.168.0.12:8080`.
+
+# Effect
+![effect.png](effect.png)
