@@ -39,27 +39,44 @@ class Articles:
 
 
 class SimPlazaRSS:
-    def __init__(self):
+    def __init__(self, site='SceneryAddons.org'):
+        self.site = site
+        self.max_pages = 2
         self.articles = Articles()
         self.urls = []
-        self.read_config()
+        self.config = self.read_config()
         self.read_cache()
         self.run()
 
     def read_config(self):
-        pass
+        configs = {
+            'SimPlaza.org': {
+                'base_url': 'https://simplaza.org',
+                'title': ['title', 'entry-title'],
+                'desc': ['su-spoiler-content', 'su-u-clearfix', 'su-u-trim'],
+                'created': ['entry-date', 'published'],
+                'img': ['aligncenter', 'size-large', 'wp-image-58']
+            },
+            'SceneryAddons.org': {
+                'base_url': 'https://sceneryaddons.org',
+                'title': ['title', 'entry-title'],
+                'desc': ['scad-description'],
+                'created': ['entry-date', 'published'],
+                'img': ['aligncenter']
+            }
+        }
+
+        return configs[self.site]
 
     def read_cache(self):
         pass
 
     def get_latest_posts(self):
-        url = "https://simplaza.org/"
         post_links = []
-        # TODO: pages
-        for i in range(1, 2):
-            new_url = url
+        for i in range(1, self.max_pages + 1):
+            new_url = self.config['base_url']
             if i > 1:
-                new_url = f"{url}page/{i}"
+                new_url = f"{self.config['base_url']}/page/{i}"
             print(f"Fetching {new_url}")
             response = requests.get(new_url)
             if response.status_code != 200:
@@ -85,19 +102,22 @@ class SimPlazaRSS:
         return soup
 
     def parse_post_soup(self, soup):
-
+        config = self.config
         headers = soup.find_all('h1')
         header = None
         for h1 in headers:
-            if h1['class'] == ['title', 'entry-title']:
-                header = html.escape(h1.string)
+            if h1['class'] == config['title']:
+                if h1.string is None:
+                    header = html.escape(h1.text)
+                else:
+                    header = html.escape(h1.string)
                 break
 
         divs = soup.find_all("div")
         desc = None
         for div in divs:
             try:
-                if div['class'] == ['su-spoiler-content', 'su-u-clearfix', 'su-u-trim']:
+                if div['class'] == config['desc']:
                     desc = div.get_text()
                     break
             except:
@@ -106,7 +126,7 @@ class SimPlazaRSS:
         time_tags = soup.find_all("time")
         created = None
         for tag in time_tags:
-            if tag['class'] == ['entry-date', 'published']:
+            if tag['class'] == config['created']:
                 created = tag['datetime']
                 break
 
@@ -114,15 +134,15 @@ class SimPlazaRSS:
         image = None
         for tag in images:
             try:
-                if tag['class'] == ['aligncenter', 'size-large', 'wp-image-58']:
+                if tag['class'] == config['img']:
                     image = tag['src']
                     break
             except:
                 pass
 
-        download_links = soup.find_all("a", href=True, string="Download")
+        download_links = soup.find_all("a", href=True)
         for link in download_links:
-            if "torrent" in link["href"]:
+            if "hoster=torrent" in link["href"]:
                 return [link["href"], header, desc, created, image]
 
         return [None, header, desc, created, image]
@@ -161,7 +181,7 @@ class SimPlazaRSS:
             )
 
         feed = Feed(
-            title="Simplaza.org RSS Feed",
+            title=f"{self.site} RSS Feed",
             link="localhost",
             description="by Czupak",
             language="en-US",
@@ -172,7 +192,9 @@ class SimPlazaRSS:
     def run(self):
         print("Checking for new posts...")
         new_posts = self.get_latest_posts()
-        for post in new_posts:
+
+        for i in range(len(new_posts)):
+            post = new_posts[i]
             if post not in self.urls:
                 self.urls.append(post)
                 post_soup = self.get_post_soup(post)
@@ -181,16 +203,17 @@ class SimPlazaRSS:
                     if download_link:
                         magnet_link = self.get_magnet_link(download_link)
                         if magnet_link:
-                            print(f"{header=} {created=} {image=}")
+                            print(f"{i + 1}/{len(new_posts)}: {header=} {created=} {image=}")
                             print("Magnet Link Found:", magnet_link)
                             art = self.articles.add_article(header, magnet_link, post, image, desc, created)
         print('Preparing RSS...')
         rss = self.generate_rss_feed(self.articles.get_articles())
-        print('Preparing index.html...')
-        with open('index.html', 'w', encoding="UTF-8") as fh:
+        print(f'Preparing {self.site}.html...')
+        with open(f'{self.site}.html', 'w', encoding="UTF-8") as fh:
             fh.write(rss)
         print("All done!")
 
 
 if __name__ == "__main__":
-    SimPlazaRSS()
+    SimPlazaRSS(site='SceneryAddons.org')
+    SimPlazaRSS(site='SimPlaza.org')
